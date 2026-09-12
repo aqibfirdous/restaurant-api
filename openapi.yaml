@@ -1,0 +1,534 @@
+openapi: "3.0.3"
+info:
+  title: Restaurant API
+  description: Canonical Restaurant backend API
+  version: "1.0.0"
+servers:
+  - url: http://localhost:5000
+
+paths:
+  /menu:
+    get:
+      operationId: listMenu
+      summary: Return available menu items grouped by category
+      responses:
+        "200":
+          description: Menu items grouped by category
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MenuCategoryResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /menu/{id}:
+    get:
+      operationId: getMenuItem
+      summary: Return one menu item
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Menu item found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MenuItemResponse"
+        "404":
+          description: Menu item not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /customers:
+    post:
+      operationId: createCustomer
+      summary: Create a customer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCustomerRequest"
+      responses:
+        "201":
+          description: Customer created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerResponse"
+        "409":
+          description: Duplicate email
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /tables:
+    get:
+      operationId: listDiningTables
+      summary: Return active dining tables
+      responses:
+        "200":
+          description: Active dining tables
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DiningTableResponse"
+
+  /reservations:
+    post:
+      operationId: createReservation
+      summary: Reserve a table
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateReservationRequest"
+      responses:
+        "201":
+          description: Reservation created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReservationResponse"
+        "400":
+          description: Validation error (party too large, etc.)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Table already reserved at that time
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Customer or dining table not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /reservations/{id}:
+    get:
+      operationId: getReservation
+      summary: Return reservation details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Reservation found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReservationResponse"
+        "404":
+          description: Reservation not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orders:
+    post:
+      operationId: createOrder
+      summary: Create order with items
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOrderRequest"
+      responses:
+        "201":
+          description: Order created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderResponse"
+        "400":
+          description: Validation error (unavailable item, etc.)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Referenced customer, table, or reservation not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orders/{id}:
+    get:
+      operationId: getOrder
+      summary: Return complete order with items
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Order found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderResponse"
+        "404":
+          description: Order not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orders/{id}/status:
+    patch:
+      operationId: updateOrderStatus
+      summary: Apply allowed status transition
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateOrderStatusRequest"
+      responses:
+        "200":
+          description: Status updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderResponse"
+        "400":
+          description: Invalid status transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Order not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /customers/{id}/orders:
+    get:
+      operationId: listCustomerOrders
+      summary: Return order history for one customer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Customer orders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OrderSummaryResponse"
+        "404":
+          description: Customer not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  schemas:
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+
+    MenuItemResponse:
+      type: object
+      required:
+        - id
+        - category_id
+        - name
+        - description
+        - price_cents
+        - available
+      properties:
+        id:
+          type: integer
+        category_id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+        price_cents:
+          type: integer
+        available:
+          type: boolean
+
+    MenuCategoryResponse:
+      type: object
+      required:
+        - id
+        - name
+        - sort_order
+        - items
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        sort_order:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/MenuItemResponse"
+
+    CreateCustomerRequest:
+      type: object
+      required:
+        - name
+        - email
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+
+    CustomerResponse:
+      type: object
+      required:
+        - id
+        - name
+        - email
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+          nullable: true
+
+    DiningTableResponse:
+      type: object
+      required:
+        - id
+        - label
+        - seats
+        - active
+      properties:
+        id:
+          type: integer
+        label:
+          type: string
+        seats:
+          type: integer
+        active:
+          type: boolean
+
+    CreateReservationRequest:
+      type: object
+      required:
+        - customer_id
+        - dining_table_id
+        - reservation_time
+        - party_size
+      properties:
+        customer_id:
+          type: integer
+        dining_table_id:
+          type: integer
+        reservation_time:
+          type: string
+          format: date-time
+        party_size:
+          type: integer
+          minimum: 1
+
+    ReservationResponse:
+      type: object
+      required:
+        - id
+        - customer_id
+        - dining_table_id
+        - reservation_time
+        - party_size
+        - status
+      properties:
+        id:
+          type: integer
+        customer_id:
+          type: integer
+        dining_table_id:
+          type: integer
+        reservation_time:
+          type: string
+        party_size:
+          type: integer
+        status:
+          type: string
+
+    CreateOrderRequest:
+      type: object
+      required:
+        - items
+      properties:
+        customer_id:
+          type: integer
+        dining_table_id:
+          type: integer
+        reservation_id:
+          type: integer
+        items:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/OrderItemRequest"
+
+    OrderItemRequest:
+      type: object
+      required:
+        - menu_item_id
+        - quantity
+      properties:
+        menu_item_id:
+          type: integer
+        quantity:
+          type: integer
+          minimum: 1
+
+    OrderItemResponse:
+      type: object
+      required:
+        - id
+        - menu_item_id
+        - quantity
+        - unit_price_cents
+        - line_total_cents
+      properties:
+        id:
+          type: integer
+        menu_item_id:
+          type: integer
+        quantity:
+          type: integer
+        unit_price_cents:
+          type: integer
+        line_total_cents:
+          type: integer
+
+    OrderResponse:
+      type: object
+      required:
+        - id
+        - status
+        - total_cents
+        - created_at
+        - items
+      properties:
+        id:
+          type: integer
+        customer_id:
+          type: integer
+          nullable: true
+        dining_table_id:
+          type: integer
+          nullable: true
+        reservation_id:
+          type: integer
+          nullable: true
+        status:
+          type: string
+        total_cents:
+          type: integer
+        created_at:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderItemResponse"
+
+    OrderSummaryResponse:
+      type: object
+      required:
+        - id
+        - status
+        - total_cents
+        - created_at
+      properties:
+        id:
+          type: integer
+        customer_id:
+          type: integer
+          nullable: true
+        dining_table_id:
+          type: integer
+          nullable: true
+        reservation_id:
+          type: integer
+          nullable: true
+        status:
+          type: string
+        total_cents:
+          type: integer
+        created_at:
+          type: string
+
+    UpdateOrderStatusRequest:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum:
+            - NEW
+            - PREPARING
+            - READY
+            - COMPLETED
+            - CANCELLED

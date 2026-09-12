@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Restaurant API — Live Demo</title>
+<style>
+  :root {
+    --bg: #0f172a; --panel: #1e293b; --panel2: #334155;
+    --text: #e2e8f0; --muted: #94a3b8; --accent: #38bdf8; --ok: #4ade80; --err: #f87171;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.5 "Segoe UI", system-ui, sans-serif;
+  }
+  header { padding: 18px 24px; border-bottom: 1px solid var(--panel2); }
+  header h1 { margin: 0; font-size: 20px; }
+  header p { margin: 4px 0 0; color: var(--muted); }
+  main { padding: 20px 24px; display: grid; grid-template-columns: 340px 1fr; gap: 18px; align-items: start; }
+  .card { background: var(--panel); border: 1px solid var(--panel2); border-radius: 10px; padding: 14px; }
+  h2 { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  button {
+    width: 100%; margin: 4px 0; padding: 9px 12px; cursor: pointer;
+    background: var(--panel2); color: var(--text); border: 1px solid #475569;
+    border-radius: 7px; font-size: 13px; text-align: left;
+  }
+  button:hover { border-color: var(--accent); background: #3b4a63; }
+  button.run { background: #0c4a6e; border-color: var(--accent); color: #e0f2fe; font-weight: 600; text-align: center; }
+  input {
+    width: 100%; margin: 4px 0 10px; padding: 8px 10px; background: var(--bg);
+    color: var(--text); border: 1px solid #475569; border-radius: 7px; font-size: 13px;
+  }
+  label { font-size: 12px; color: var(--muted); }
+  #out {
+    min-height: 420px; max-height: 78vh; overflow: auto; white-space: pre-wrap;
+    font: 12px/1.5 "Cascadia Mono", Consolas, monospace;
+  }
+  #out .line { padding: 3px 6px; border-radius: 4px; margin: 2px 0; }
+  .line .tag { font-weight: 700; margin-right: 8px; }
+  .line.ok   { background: rgba(74,222,128,.08); } .line.ok .tag { color: var(--ok); }
+  .line.err  { background: rgba(248,113,113,.08); } .line.err .tag { color: var(--err); }
+  .line.info { color: var(--muted); }
+  .json { color: #93c5fd; }
+  .kbd { color: var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Restaurant API — Live Demo</h1>
+  <p>openapi.yaml contract + Flask/SQLite backend · every call below is validated against the contract</p>
+</header>
+<main>
+  <div>
+    <div class="card">
+      <h2>Canonical flow</h2>
+      <button class="run" onclick="runAll()">Run full customer journey</button>
+    </div>
+    <div class="card" style="margin-top:14px">
+      <h2>Menu</h2>
+      <button onclick="api('menu')">GET /menu</button>
+      <button onclick="api('menuItem')">GET /menu/{id}</button>
+    </div>
+    <div class="card" style="margin-top:14px">
+      <h2>Tables</h2>
+      <button onclick="api('tables')">GET /tables</button>
+    </div>
+    <div class="card" style="margin-top:14px">
+      <h2>Customer</h2>
+      <label for="email">email</label>
+      <input id="email" value="alice@example.com">
+      <button onclick="api('createCustomer')">POST /customers</button>
+    </div>
+    <div class="card" style="margin-top:14px">
+      <h2>Reservation</h2>
+      <button onclick="api('createReservation')">POST /reservations</button>
+      <button onclick="api('getReservation')">GET /reservations/{id}</button>
+    </div>
+    <div class="card" style="margin-top:14px">
+      <h2>Order</h2>
+      <button onclick="api('createOrder')">POST /orders</button>
+      <button onclick="api('getOrder')">GET /orders/{id}</button>
+      <button onclick="api('orderStatus')">PATCH /orders/{id}/status</button>
+      <button onclick="api('customerOrders')">GET /customers/{id}/orders</button>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Output</h2>
+    <div id="out"></div>
+  </div>
+</main>
+
+<script>
+  const state = { customer: null, table: null, reservation: null, order: null };
+  const out = document.getElementById('out');
+
+  function uniqEmail() {
+    return 'alice.' + Date.now() + '@example.com';
+  }
+
+  async function ensureCustomer() {
+    if (state.customer && state.customer.ok) return state.customer;
+    const email = document.getElementById('email').value.trim() || 'alice@example.com';
+    state.customer = await call('POST', '/customers', { name: 'Alice', email, phone: '555-0000' });
+    if (!state.customer.ok) {
+      log('  email taken (' + state.customer.status + ') — retrying with a unique email', 'err');
+      state.customer = await call('POST', '/customers', { name: 'Alice', email: uniqEmail(), phone: '555-0000' });
+    }
+    return state.customer;
+  }
+
+  function log(text, cls) {
+    const line = document.createElement('div');
+    line.className = 'line ' + (cls || 'info');
+    line.textContent = text;
+    out.appendChild(line);
+    out.scrollTop = out.scrollHeight;
+  }
+  function blank(name, body) {
+    log('`' + name + '`', 'info');
+  }
+
+  async function call(method, path, body) {
+    const opts = { method, headers: {} };
+    if (body) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+    const res = await fetch(path, opts);
+    let data = null;
+    try { data = await res.json(); } catch (e) {}
+    log('→ ' + method + ' ' + path + '  [' + res.status + ']');
+    log('  ' + JSON.stringify(data), res.ok ? 'ok' : 'err');
+    return { status: res.status, ok: res.ok, data };
+  }
+
+  async function api(which) {
+    out.innerHTML = '';
+    const email = document.getElementById('email').value.trim() || 'alice@example.com';
+    try {
+      if (which === 'menu') { blank('Menu'); await call('GET', '/menu'); }
+
+      else if (which === 'menuItem') {
+        const m = await call('GET', '/menu');
+        const item = m.data && m.data[0] && m.data[0].items[0];
+        if (item) await call('GET', '/menu/' + item.id);
+      }
+
+      else if (which === 'tables') { blank('Tables'); await call('GET', '/tables'); }
+
+      else if (which === 'createCustomer') {
+        blank('Create customer');
+        await ensureCustomer();
+      }
+
+      else if (which === 'createReservation') {
+        blank('Create reservation');
+        await ensureCustomer();
+        if (!state.table) {
+          const t = await call('GET', '/tables');
+          state.table = t.data ? t.data.find(x => x.seats >= 4) : null;
+        }
+        if (state.customer.ok && state.table)
+          state.reservation = await call('POST', '/reservations', {
+            customer_id: state.customer.data.id,
+            dining_table_id: state.table.id,
+            reservation_time: '2026-12-20T19:00:00Z',
+            party_size: 2,
+          });
+        else log('Need a customer id and a table before reserving.', 'err');
+      }
+
+      else if (which === 'getReservation') {
+        blank('Get reservation');
+        if (state.reservation && state.reservation.data) await call('GET', '/reservations/' + state.reservation.data.id);
+        else log('No reservation yet — run a reservation first.', 'err');
+      }
+
+      else if (which === 'createOrder') {
+        blank('Create order');
+        await ensureCustomer();
+        if (!state.reservation) { log('Creating a reservation first…', 'info'); await api('createReservation'); }
+        const m = await call('GET', '/menu');
+        const items = m.data ? [].concat(...m.data.map(c => c.items)).slice(0, 2) : [];
+        if (state.customer.ok && state.reservation.ok && items.length)
+          state.order = await call('POST', '/orders', {
+            customer_id: state.customer.data.id,
+            reservation_id: state.reservation.data.id,
+            items: items.map(i => ({ menu_item_id: i.id, quantity: 1 })),
+          });
+        else log('Need a customer and reservation before ordering.', 'err');
+      }
+
+      else if (which === 'getOrder') {
+        blank('Get order');
+        if (state.order && state.order.data) await call('GET', '/orders/' + state.order.data.id);
+        else log('No order yet — create one first.', 'err');
+      }
+
+      else if (which === 'orderStatus') {
+        blank('Advance status');
+        if (state.order && state.order.data) {
+          for (const st of ['PREPARING', 'READY', 'COMPLETED']) {
+            const upd = await call('PATCH', '/orders/' + state.order.data.id + '/status', { status: st });
+            if (upd.data) state.order = upd;
+          }
+        } else log('No order yet — create one first.', 'err');
+      }
+
+      else if (which === 'customerOrders') {
+        blank('Order history');
+        if (state.customer && state.customer.data) await call('GET', '/customers/' + state.customer.data.id + '/orders');
+        else log('No customer yet — create one first.', 'err');
+      }
+    } catch (e) {
+      log('⚠ ' + e, 'err');
+    }
+  }
+
+  async function runAll() {
+    out.innerHTML = '';
+    log('Starting canonical customer journey…', 'info');
+    try {
+      log('— 1. menu —'); const m = await call('GET', '/menu');
+      const flat = m.data ? [].concat(...m.data.map(c => c.items)) : [];
+      const items = flat.slice(0, 2);
+
+      log('— 2. customer Alice —');
+      const cust = await ensureCustomer();
+      if (!cust.ok) { log('Aborting: no customer id.', 'err'); return; }
+
+      log('— 3. tables —'); const t = await call('GET', '/tables');
+      state.table = t.data ? t.data.find(x => x.seats >= 4) : null;
+      if (!state.table) { log('Aborting: no 4+ seat table.', 'err'); return; }
+
+      log('— 4. reservation —');
+      state.reservation = await call('POST', '/reservations', {
+        customer_id: cust.data.id, dining_table_id: state.table.id,
+        reservation_time: '2026-12-20T19:00:00Z', party_size: 2,
+      });
+      if (!state.reservation.ok) { log('Aborting: reservation failed.', 'err'); return; }
+
+      log('— 5. order —');
+      state.order = await call('POST', '/orders', {
+        customer_id: cust.data.id, reservation_id: state.reservation.data.id,
+        items: items.map(i => ({ menu_item_id: i.id, quantity: 1 })),
+      });
+      if (!state.order.ok) { log('Aborting: order failed.', 'err'); return; }
+      const expected = items.reduce((s, i) => s + i.price_cents, 0);
+      log('  server total ' + state.order.data.total_cents + ' == DB sum ' + expected +
+          (state.order.data.total_cents === expected ? ' ✓' : ' ✗'));
+
+      log('— 6. status NEW → PREPARING → READY → COMPLETED —');
+      for (const st of ['PREPARING', 'READY', 'COMPLETED']) {
+        const upd = await call('PATCH', '/orders/' + state.order.data.id + '/status', { status: st });
+        if (upd.data) state.order = upd;
+      }
+
+      log('— 7. order history —');
+      const h = await call('GET', '/customers/' + cust.data.id + '/orders');
+      if (h.ok && state.order.ok)
+        log('  Journey complete: order ' + state.order.data.id + ' is ' + state.order.data.status + '.', 'ok');
+    } catch (e) {
+      log('⚠ ' + e, 'err');
+    }
+  }
+</script>
+</body>
+</html>
