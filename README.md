@@ -132,6 +132,8 @@ restaurant-api/
 
 - **Swagger UI** (humans) at `http://127.0.0.1:8000/docs`
 - **MCP Streamable HTTP** (AI agents) at `http://127.0.0.1:8000/mcp`
+- **Live demo** (clickable restaurant flow) at `http://127.0.0.1:8000/demo`
+  (redirects to the Product 004 page at `http://127.0.0.1:5000/demo`)
 
 Every operation in the document becomes an MCP tool with the `operationId` as
 its name. The gateway contains **zero per-endpoint code**: FastMCP's
@@ -143,6 +145,7 @@ SQLite access and no Flask-handler import anywhere in `mcp_gateway/`.
 openapi.yaml (source of truth)
         |
         +---> Swagger UI (/docs)
+        +---> Live demo   (/demo -> backend /demo)
         +---> FastMCP.from_openapi(openapi_spec, client)  -> tools/call
                                        |  httpx2
                                        v

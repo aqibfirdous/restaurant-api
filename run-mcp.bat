@@ -15,4 +15,4 @@ set "OPENAPI_FILE=%~dp0openapi.yaml"
 set "API_BASE_URL=http://127.0.0.1:5000"
 start "mcp gateway" .venv\Scripts\python.exe -m mcp_gateway.server
 
-echo Done.  Backend http://127.0.0.1:5000/  |  Swagger UI http://127.0.0.1:8000/docs  |  Spec http://127.0.0.1:8000/openapi.yaml
+echo Done.  Live demo http://127.0.0.1:5000/demo  |  Swagger UI http://127.0.0.1:8000/docs  |  Spec http://127.0.0.1:8000/openapi.yaml  |  MCP http://127.0.0.1:8000/mcp

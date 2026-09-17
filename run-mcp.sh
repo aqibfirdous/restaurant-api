@@ -20,4 +20,9 @@ OPENAPI_FILE="$(pwd)/openapi.yaml" API_BASE_URL="http://127.0.0.1:5000" \
 GATEWAY_PID=$!
 
 trap 'kill $BACKEND_PID $GATEWAY_PID 2>/dev/null || true' EXIT
+
+echo "Live demo  http://127.0.0.1:5000/demo"
+echo "Swagger UI http://127.0.0.1:8000/docs"
+echo "Spec       http://127.0.0.1:8000/openapi.yaml"
+echo "MCP        http://127.0.0.1:8000/mcp"
 wait

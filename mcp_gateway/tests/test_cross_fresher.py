@@ -144,3 +144,24 @@ def test_spec_file_is_the_same_served_to_swagger(gateway_session):
         served = resp.read()
     assert served == local
     assert served.startswith(b"openapi:")
+
+
+def test_demo_redirects_to_backend_demo(gateway_session):
+    """/demo on the gateway jumps to the live demo on the Product 004 backend."""
+    import urllib.request
+
+    base = gateway_session["url"].rsplit("/mcp", 1)[0]
+
+    class NoFollow(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, *args, **kwargs):
+            return None
+
+    opener = urllib.request.build_opener(NoFollow())
+    try:
+        with opener.open(base + "/demo", timeout=5) as resp:
+            assert resp.status in (301, 302, 303, 307, 308)
+            location = resp.headers.get("Location", "")
+            assert location.endswith("/demo")
+    except urllib.error.HTTPError as exc:
+        assert exc.code in (301, 302, 303, 307, 308)
+        assert exc.headers.get("Location", "").endswith("/demo")

@@ -37,6 +37,10 @@ class Config:
     def docs_url(self) -> str:
         return "http://%s:%s/docs" % (self.host, self.port)
 
+    @property
+    def demo_url(self) -> str:
+        return "%s/demo" % self.api_base_url
+
 
 def _default_openapi_file() -> str:
     repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

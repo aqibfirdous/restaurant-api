@@ -19,7 +19,7 @@ import uvicorn
 import yaml
 from fastmcp import FastMCP
 from fastmcp.server.middleware import Middleware, MiddlewareContext
-from starlette.responses import FileResponse, HTMLResponse, PlainTextResponse
+from starlette.responses import FileResponse, HTMLResponse, PlainTextResponse, RedirectResponse
 from starlette.routing import Route
 from starlette.staticfiles import StaticFiles
 
@@ -139,6 +139,9 @@ def build_gateway(cfg: Config):
     app.router.routes.append(
         Route("/docs/", lambda _request: HTMLResponse(swagger.index_html()), methods=["GET"])
     )
+    app.router.routes.append(
+        Route("/demo", lambda _request: RedirectResponse(cfg.demo_url), methods=["GET"])
+    )
     app.mount(
         swagger.STATIC_PREFIX,
         StaticFiles(directory=swagger.static_dir()),
@@ -149,8 +152,8 @@ def build_gateway(cfg: Config):
         Route(
             "/",
             lambda _request: PlainTextResponse(
-                "OpenAPI-to-MCP gateway. MCP: %s | Swagger: /docs | Spec: /openapi.yaml\n"
-                % cfg.mcp_url
+                "OpenAPI-to-MCP gateway. MCP: %s | Swagger: /docs | Spec: /openapi.yaml | "
+                "Demo: /demo\n" % cfg.mcp_url
             ),
             methods=["GET"],
         )
@@ -175,6 +178,8 @@ def main() -> None:
     logger.info("Upstream API base URL: %s", cfg.api_base_url)
     logger.info("MCP endpoint (Streamable HTTP): %s", cfg.mcp_url)
     logger.info("Swagger UI: %s", cfg.docs_url)
+    logger.info("Swagger spec: %s/openapi.yaml", "http://%s:%s" % (cfg.host, cfg.port))
+    logger.info("Live demo: %s", cfg.demo_url)
 
     uvicorn.run(app, host=cfg.host, port=cfg.port, log_level="info")
 
