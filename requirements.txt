@@ -4,3 +4,5 @@ openapi-core>=0.19,<1.0
 openapi-spec-validator>=0.7,<1.0
 pyyaml>=6.0,<7.0
 requests>=2.31,<3.0
+fastmcp==4.0.3
+flask-swagger-ui>=5.32,<6.0

@@ -113,11 +113,93 @@ restaurant-api/
     test_reservations.py
     test_orders.py
     test_harness.py
+  mcp_gateway/        << Product 005: generic OpenAPI-to-MCP gateway >>
+    config.py         env-only configuration
+    server.py         FastMCP.from_openapi + httpx2 forwarding + Swagger UI
+    swagger.py        Swagger UI asset serving
+    tests/            discovery, workflow, failures, cross-fresher suites
   requirements.txt
   run-tests.sh / run-tests.bat / Makefile
+  run-mcp.sh / run-mcp.bat
+  run-tests-mcp.sh / run-tests-mcp.bat
 ```
 
-## Add a new endpoint
+---
+
+# Product 005 — Generic OpenAPI-to-MCP Gateway
+
+`mcp_gateway/` publishes the **same** `openapi.yaml` two ways:
+
+- **Swagger UI** (humans) at `http://127.0.0.1:8000/docs`
+- **MCP Streamable HTTP** (AI agents) at `http://127.0.0.1:8000/mcp`
+
+Every operation in the document becomes an MCP tool with the `operationId` as
+its name. The gateway contains **zero per-endpoint code**: FastMCP's
+OpenAPIProvider generates the tools directly from the spec, and every tool call
+is forwarded over HTTP (via `httpx2`) to the Product 004 backend. There is no
+SQLite access and no Flask-handler import anywhere in `mcp_gateway/`.
+
+```
+openapi.yaml (source of truth)
+        |
+        +---> Swagger UI (/docs)
+        +---> FastMCP.from_openapi(openapi_spec, client)  -> tools/call
+                                       |  httpx2
+                                       v
+                          Product 004 Flask backend (:5000)
+```
+
+### Run the gateway (Windows / Unix / Make)
+
+```
+run-mcp.bat            # or ./run-mcp.sh      (reset DB, backend :5000, gateway :8000)
+make run-mcp
+```
+
+### Configuration (env only)
+
+| Variable          | Default                        | Meaning                          |
+|-------------------|--------------------------------|----------------------------------|
+| `OPENAPI_FILE`    | repo `openapi.yaml`            | Contract loaded + served as-is   |
+| `API_BASE_URL`    | `http://127.0.0.1:5000`        | Upstream HTTP backend            |
+| `MCP_HOST`        | `127.0.0.1`                    | Bind host                        |
+| `MCP_PORT`        | `8000`                         | Bind port                        |
+| `MCP_PATH`        | `/mcp`                         | Streamable HTTP endpoint         |
+| `API_TIMEOUT`     | `30`                           | Upstream timeout (seconds)       |
+| `GATEWAY_LOG_LEVEL` | `INFO`                       | Gateway logging level            |
+
+Errors are never hidden: HTTP errors from upstream surface through the MCP
+error channel with status + body (e.g. `HTTP error 409: Conflict - {...}`), and
+an unreachable backend fails fast with a clear message instead of hanging.
+
+### Run both suites (one command)
+
+```
+run-tests-mcp.bat     # or ./run-tests-mcp.sh      (Product 004 + Product 005)
+make test-mcp
+```
+
+### Canonical user test through MCP
+
+From a clean database, with `openapi.yaml` served identically at `/docs` and as
+MCP tools:
+
+1. `listMenu` — see the menu, pick items
+2. `createCustomer` — create Alice
+3. `listDiningTables` — choose a 4-seat table
+4. `createReservation` — Alice, party of 2
+5. `createOrder` — Alice orders 2 menu items
+6. `getOrder` — server-computed total (prices come from SQLite, never the client)
+7. `updateOrderStatus` NEW → PREPARING → READY → COMPLETED
+8. `listCustomerOrders` — verify the completed order
+9. Trigger one expected business error (duplicate email) and confirm the error
+   text is readable
+10. Run `run-tests-mcp.bat` — both suites PASS
+
+This sequence is captured verbatim in
+`mcp_gateway/tests/test_workflow.py::test_canonical_user_workflow_from_readme`.
+
+### Add a new endpoint
 
 1. Add the path + schemas to `openapi.yaml` (the operationId names the test).
 2. Add the table/inserts to `schema.sql` / `seed.sql` if backed by data.
